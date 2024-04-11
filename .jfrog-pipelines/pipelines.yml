@@ -1,0 +1,90 @@
+resources:
+  - name: approvalGateRes
+    type: PropertyBag
+    configuration:
+      approvalRequired: ""
+
+pipelines:        
+  - name: DockerRefreshFlow
+    steps:
+      - name: triggerDockerRefreshValidation
+        type: Bash
+        configuration:
+          environmentVariables:
+            dockerRepoName: 
+              default: ""
+              description: Name of docker repository
+              allowCustom: true
+            dockerImage:
+              default: ""
+              description: Name of docker image with tag
+              allowCustom: true
+          integrations:
+            - name: lnp_pipelines_admin
+        execution:
+          onStart:
+            - |
+              if [[ "$dockerRepoName" == "" && "$dockerImage" == "" ]]; then
+                echo "env variable value for dockerRepoName and dockerImage is not set, please re-run after providing the values"
+                exit 1
+              elif [[ "$dockerRepoName" == "" && "$dockerImage" !== "" ]]; then
+                statusCode=$(curl --location --request GET "https://pipelineslnp1.jfrogdev.org/artifactory/api/repositories/${dockerRepoName}" --header "Authorization:Bearer ${int_lnp_pipelines_admin_token}" | jq -r '.statusCode')
+                if [ $statusCode == 200 ]
+                  echo "docker repo is present in artifactory"
+                  add_run_variables repoExists=true
+                elif 
+                  echo "docker repo is not present in artifactory"
+                  add_run_variables repoExists=false
+                fi
+              elif [[ "$dockerRepoName" !== "" && "$dockerImage" == "" ]]; then
+                if [[ $(jfrog rt s "${dockerImage}/*" | jq length) > 0 ]]; then
+                  echo "docker image is present" 
+                  add_run_variables imageExists=true
+                else 
+                  echo "docker image is not present" 
+                  add_run_variables imageExists=false
+                  write_output approvalGateRes "approvalRequired=true"
+                fi
+              fi
+
+      - name: approvalToDLfromExternalSource
+        type: Bash
+        configuration:
+          inputResources:
+            - name: approvalGateRes
+              newVersionOnly: true
+          inputSteps:
+            - name: triggerDockerRefreshCheck
+              status:
+                - success
+          requiresApproval:
+            approvers:
+              - admin
+            notifications:
+              - integrationName: pipelines_lnp_slack
+        execution:
+          onStart:
+            - echo "Downloading image from extrenal source since approval was provided"
+          onExecute:
+            - |
+              docker image pull ${dockerImage}:latest
+            - jfrog rt docker-push $dockerImage $dockerRepoName --build-name="DockerRefreshFlow" --build-number="${run_id}"
+            - add_run_variables newImageDownloaded=true
+
+      - name: summaryReport
+        type: Bash
+        configuration:
+          inputSteps:
+            - name: approvalToDLfromExternalSource
+              status:
+                - success
+                - failed
+                - skipped
+                - error
+        execution:
+          onExecute:
+            - if [[ "$repoExists" == "true" ]]; then echo "Provided docker repo exists" fi
+            - if [[ "$repoExists" == "false" ]]; then echo "Provided docker repo does not exist" fi
+            - if [[ "$imageExists" == "true" ]]; then echo "Provided docker image exists" fi
+            - if [[ "$imageExists" == "false" ]]; then echo "Provided docker image does not exist" fi
+            - if [[ "$newImageDownloaded" == "true" ]]; then echo "New image was downloaded from the external source" fi
