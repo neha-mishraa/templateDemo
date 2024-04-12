@@ -28,7 +28,7 @@ pipelines:
                 echo "env variable value for dockerRepoName and dockerImage is not set, please re-run after providing the values"
                 exit 1
               elif [[ "$dockerRepoName" == "" && "$dockerImage" !== "" ]]; then
-                statusCode=$(curl --location --request GET "https://pipelineslnp1.jfrogdev.org/artifactory/api/repositories/${dockerRepoName}" --header "Authorization:Bearer ${int_lnp_pipelines_admin_token}" | jq -r '.statusCode')
+                statusCode=$(curl --location --request GET "${int_lnp_pipelines_admin_artifactoryUrl}/api/repositories/${dockerRepoName}" --header "Authorization:Bearer ${int_lnp_pipelines_admin_accessToken}" | jq -r '.statusCode')
                 if [ $statusCode == 200 ]
                   echo "docker repo is present in artifactory"
                   add_run_variables repoExists=true
