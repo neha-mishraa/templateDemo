@@ -78,7 +78,7 @@ pipelines:
             - name: approvalToDLfromExternalSource
               status:
                 - success
-                - failed
+                - failure
                 - skipped
         execution:
           onExecute:
