@@ -54,7 +54,7 @@ pipelines:
             - name: approvalGateRes
               newVersionOnly: true
           inputSteps:
-            - name: triggerDockerRefreshCheck
+            - name: triggerDockerRefreshValidation
               status:
                 - success
           requiresApproval:
