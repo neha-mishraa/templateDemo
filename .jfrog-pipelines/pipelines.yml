@@ -80,7 +80,6 @@ pipelines:
                 - success
                 - failed
                 - skipped
-                - error
         execution:
           onExecute:
             - if [[ "$repoExists" == "true" ]]; then echo "Provided docker repo exists" fi
